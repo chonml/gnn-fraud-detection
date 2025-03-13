@@ -92,6 +92,8 @@ class HeteroRGCNAaron(nn.Module):
         # features or transformations to make your model work differently from the base.
         # HINT: should only use a for loop and use the F.relu function
 
+        h_dict = {k: F.relu(h) for k, h in h_dict.items()}
+
         for i, layer in enumerate(self.layers[:-1]):
             if i != 0:
                 h_dict = {k: F.leaky_relu(h) for k, h in h_dict.items()}
