@@ -1,18 +1,18 @@
+import dgl.function as fn
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from dgl.nn.pytorch import GATConv, GraphConv, SAGEConv
 
-from dgl.nn.pytorch import GraphConv, GATConv, SAGEConv
-import dgl.function as fn
 
 # BASE MODEL
 class HeteroRGCNLayer(nn.Module):
     def __init__(self, in_size, out_size, etypes):
         super(HeteroRGCNLayer, self).__init__()
         # W_r for each relation
-        self.weight = nn.ModuleDict({
-                name: nn.Linear(in_size, out_size) for name in etypes
-            })
+        self.weight = nn.ModuleDict(
+            {name: nn.Linear(in_size, out_size) for name in etypes}
+        )
 
     def forward(self, G, feat_dict):
         # The input is a dictionary of node features for each type
@@ -22,63 +22,93 @@ class HeteroRGCNLayer(nn.Module):
             if srctype in feat_dict:
                 Wh = self.weight[etype](feat_dict[srctype])
                 # Save it in graph for message passing
-                G.nodes[srctype].data['Wh_%s' % etype] = Wh
+                G.nodes[srctype].data["Wh_%s" % etype] = Wh
                 # Specify per-relation message passing functions: (message_func, reduce_func).
-                funcs[etype] = (fn.copy_u('Wh_%s' % etype, 'm'), fn.mean('m', 'h'))
+                funcs[etype] = (fn.copy_u("Wh_%s" % etype, "m"), fn.mean("m", "h"))
         # Trigger message passing of multiple types.
-        G.multi_update_all(funcs, 'sum')
+        G.multi_update_all(funcs, "sum")
         # return the updated node feature dictionary
-        return {ntype: G.nodes[ntype].data['h'] for ntype in G.ntypes if 'h' in G.nodes[ntype].data}
+        return {
+            ntype: G.nodes[ntype].data["h"]
+            for ntype in G.ntypes
+            if "h" in G.nodes[ntype].data
+        }
 
 
-class HeteroRGCN(nn.Module):
-    def __init__(self, ntype_dict, etypes, in_size, hidden_size, out_size, n_layers, embedding_size):
-        super(HeteroRGCN, self).__init__()
-        # Use trainable node embeddings as featureless inputs.
-        embed_dict = {ntype: nn.Parameter(torch.Tensor(num_nodes, in_size))
-                      for ntype, num_nodes in ntype_dict.items() if ntype != 'target'}
-        for key, embed in embed_dict.items():
-            nn.init.xavier_uniform_(embed)
-        self.embed = nn.ParameterDict(embed_dict)
-        # create layers
-        self.layers = nn.ModuleList()
-        self.layers.append(HeteroRGCNLayer(embedding_size, hidden_size, etypes))
-        # hidden layers
-        for i in range(n_layers - 1):
-            self.layers.append(HeteroRGCNLayer(hidden_size, hidden_size, etypes))
+# class HeteroRGCN(nn.Module):
+#     def __init__(
+#         self,
+#         ntype_dict,
+#         etypes,
+#         in_size,
+#         hidden_size,
+#         out_size,
+#         n_layers,
+#         embedding_size,
+#     ):
+#         super(HeteroRGCN, self).__init__()
+#         # Use trainable node embeddings as featureless inputs.
+#         embed_dict = {
+#             ntype: nn.Parameter(torch.Tensor(num_nodes, in_size))
+#             for ntype, num_nodes in ntype_dict.items()
+#             if ntype != "target"
+#         }
+#         for key, embed in embed_dict.items():
+#             nn.init.xavier_uniform_(embed)
+#         self.embed = nn.ParameterDict(embed_dict)
+#         # create layers
+#         self.layers = nn.ModuleList()
+#         self.layers.append(HeteroRGCNLayer(embedding_size, hidden_size, etypes))
+#         # hidden layers
+#         for i in range(n_layers - 1):
+#             self.layers.append(HeteroRGCNLayer(hidden_size, hidden_size, etypes))
 
-        # output layer
-        self.layers.append(nn.Linear(hidden_size, out_size))
+#         # output layer
+#         self.layers.append(nn.Linear(hidden_size, out_size))
 
-    def forward(self, g, features):
-        # get embeddings for all node types. for user node type, use passed in user features
-        h_dict = {ntype: emb for ntype, emb in self.embed.items()}
-        # feat_para = torch.tensor(features)
-        h_dict['target'] = features
+#     def forward(self, g, features):
+#         # get embeddings for all node types. for user node type, use passed in user features
+#         h_dict = {ntype: emb for ntype, emb in self.embed.items()}
+#         # feat_para = torch.tensor(features)
+#         h_dict["target"] = features
 
-        # pass through all layers
-        for i, layer in enumerate(self.layers[:-1]):
-            if i != 0:
-                h_dict = {k: F.leaky_relu(h) for k, h in h_dict.items()}
-            h_dict = layer(g, h_dict)
+#         # pass through all layers
+#         for i, layer in enumerate(self.layers[:-1]):
+#             if i != 0:
+#                 h_dict = {k: F.leaky_relu(h) for k, h in h_dict.items()}
+#             h_dict = layer(g, h_dict)
 
-        # get user logits
-        return self.layers[-1](h_dict['target'])
+#         # get user logits
+#         return self.layers[-1](h_dict["target"])
+
 
 # WORK ON THE CLASS BELOW #
 
-class HeteroRGCNSamyak(nn.Module):
-    #DONT EDIT THIS CONSTRUCTOR
-    def __init__(self, ntype_dict, etypes, in_size, hidden_size, out_size, n_layers, embedding_size):
+
+class HeteroRGCN(nn.Module):
+    # DONT EDIT THIS CONSTRUCTOR
+    def __init__(
+        self,
+        ntype_dict,
+        etypes,
+        in_size,
+        hidden_size,
+        out_size,
+        n_layers,
+        embedding_size,
+    ):
         super(HeteroRGCN, self).__init__()
-        embed_dict = {ntype: nn.Parameter(torch.Tensor(num_nodes, in_size))
-                      for ntype, num_nodes in ntype_dict.items() if ntype != 'target'}
+        embed_dict = {
+            ntype: nn.Parameter(torch.Tensor(num_nodes, in_size))
+            for ntype, num_nodes in ntype_dict.items()
+            if ntype != "target"
+        }
         for key, embed in embed_dict.items():
             nn.init.xavier_uniform_(embed)
         self.embed = nn.ParameterDict(embed_dict)
         self.layers = nn.ModuleList()
         self.layers.append(HeteroRGCNLayer(embedding_size, hidden_size, etypes))
-        
+
         for i in range(n_layers - 1):
             self.layers.append(HeteroRGCNLayer(hidden_size, hidden_size, etypes))
 
@@ -88,18 +118,20 @@ class HeteroRGCNSamyak(nn.Module):
     def forward(self, g, features):
         # This is the forward pass of the model
         # The key task is to pass input features through all layers.
-        
+
         h_dict = {ntype: emb for ntype, emb in self.embed.items()}
-        h_dict['target'] = features
+        h_dict["target"] = features
 
         # TODO: Implement your special function here!
         # You could implement a new way of updating the embeddings, performing a custom operation,
         # or adding a new layer to the model. Make sure you keep it modular and reusable.
         # HINT: Don't make it complicated (use a for loop to do an additional transformation)
-        
-        for i, layer in enumerate(self.layers[:-1]):
-            if i != 0:
-                h_dict = {k: F.leaky_relu(h) for k, h in h_dict.items()}
-            h_dict = layer(g, h_dict)
 
-        return self.layers[-1](h_dict['target'])
+        for i, layer in enumerate(self.layers[:-1]):
+            h_dict = layer(g, h_dict)
+            h_dict = {k: F.leaky_relu(h) for k, h in h_dict.items()}
+
+        for i, layer in enumerate(self.layers[:-1]):
+            h_dict = {k: F.tanh(h) for k, h in h_dict.items()}
+
+        return torch.sigmoid(self.layers[-1](h_dict["target"]))
