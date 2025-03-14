@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import
 
 from dgl.nn.pytorch import GraphConv, GATConv, SAGEConv
 import dgl.function as fn
@@ -70,7 +71,7 @@ class HeteroRGCN(nn.Module):
 
     class HeteroRGCNAllie(nn.Module):
     def __init__(self, ntype_dict, etypes, in_size, hidden_size, out_size, n_layers, embedding_size):
-        super(HeteroRGCN, self).__init__()
+        super(HeteroRGCNAllie, self).__init__()
         embed_dict = {ntype: nn.Parameter(torch.Tensor(num_nodes, in_size))
                       for ntype, num_nodes in ntype_dict.items() if ntype != 'target'}
         for key, embed in embed_dict.items():
@@ -83,6 +84,8 @@ class HeteroRGCN(nn.Module):
             self.layers.append(HeteroRGCNLayer(hidden_size, hidden_size, etypes))
 
         self.layers.append(nn.Linear(hidden_size, out_size))
+        
+        self.bn_target = nn.BatchNorm1d(hidden_size)
 
     def forward(self, g, features):
         h_dict = {ntype: emb for ntype, emb in self.embed.items()}
@@ -94,8 +97,10 @@ class HeteroRGCN(nn.Module):
         # Your function should enhance the model without interfering with its structure.
 
         for i, layer in enumerate(self.layers[:-1]):
+            h_dict = layer(g, h_dict)
+            if 'target' in h_dict:
+                h_dict['target'] = self.bn_target(h_dict['target'])
             if i != 0:
                 h_dict = {k: F.leaky_relu(h) for k, h in h_dict.items()}
-            h_dict = layer(g, h_dict)
 
         return self.layers[-1](h_dict['target'])
