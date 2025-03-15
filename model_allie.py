@@ -85,7 +85,7 @@ class HeteroRGCN(nn.Module):
 
         self.layers.append(nn.Linear(hidden_size, out_size))
         
-        self.bn_target = nn.BatchNorm1d(hidden_size)
+        self.bn_targets = nn.ModuleList([nn.BatchNorm1d(hidden_size) for _ in range(n_layers)])
 
     def forward(self, g, features):
         h_dict = {ntype: emb for ntype, emb in self.embed.items()}
@@ -99,7 +99,7 @@ class HeteroRGCN(nn.Module):
         for i, layer in enumerate(self.layers[:-1]):
             h_dict = layer(g, h_dict)
             if 'target' in h_dict:
-                h_dict['target'] = self.bn_target(h_dict['target'])
+                h_dict['target'] = self.bn_targets[i](h_dict['target'])
             if i != 0:
                 h_dict = {k: F.leaky_relu(h) for k, h in h_dict.items()}
 
